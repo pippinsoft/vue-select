@@ -74,6 +74,7 @@
     background: none;
     border: 1px solid rgba(60, 60, 60, .26);
     border-radius: 4px;
+    box-sizing: border-box;
     white-space: normal;
   }
   .v-select .dropdown-toggle:after {
@@ -114,23 +115,27 @@
   }
   /* Dropdown Menu */
   .v-select .dropdown-menu {
-    display:block;
-    position: absolute;
-    top: 100%;
-    left: 0;
+    display: block;
+    position: fixed;
     z-index: 1000;
     min-width: 160px;
     padding: 5px 0;
     margin: 0;
-    width: 100%;
+    width: auto;
     overflow-y: scroll;
     border: 1px solid rgba(0, 0, 0, .26);
-    box-shadow: 0px 3px 6px 0px rgba(0,0,0,.15);
+    box-shadow: 0 3px 6px 0 rgba(0, 0, 0, .15);
     border-top: none;
     border-radius: 0 0 4px 4px;
+    box-sizing: border-box;
     text-align: left;
     list-style: none;
     background: #fff;
+  }
+  .v-select .dropdown-menu.above {
+    border-top: 1px solid rgba(0, 0, 0, .26);
+    border-bottom: none;
+    box-shadow: none;
   }
   .v-select .no-options {
     text-align: center;
@@ -142,7 +147,7 @@
     border: 1px solid #ccc;
     border-radius: 4px;
     height: 26px;
-    margin: 4px 1px 0px 3px;
+    margin: 4px 1px 0 3px;
     padding: 1px 0.25em;
     float: left;
     line-height: 24px;
@@ -325,34 +330,34 @@
     </slot>
 
       <input
-              ref="search"
-              v-model="search"
-              @keydown.delete="maybeDeleteValue"
-              @keyup.esc="onEscape"
-              @keydown.up.prevent="typeAheadUp"
-              @keydown.down.prevent="typeAheadDown"
-              @keydown.enter.prevent="typeAheadSelect"
-              @blur="onSearchBlur"
-              @focus="onSearchFocus"
-              type="search"
-              class="form-control"
-              autocomplete="off"
-              :disabled="disabled"
-              :placeholder="searchPlaceholder"
-              :tabindex="tabindex"
-              :readonly="!searchable"
-              :style="{ width: isValueEmpty ? '100%' : 'auto' }"
-              :id="inputId"
-              aria-label="Search for option"
+        ref="search"
+        v-model="search"
+        @keydown.delete="maybeDeleteValue"
+        @keyup.esc="onEscape"
+        @keydown.up.prevent="typeAheadUp"
+        @keydown.down.prevent="typeAheadDown"
+        @keydown.enter.prevent="typeAheadSelect"
+        @blur="onSearchBlur"
+        @focus="onSearchFocus"
+        type="search"
+        class="form-control"
+        autocomplete="false"
+        :disabled="disabled"
+        :placeholder="searchPlaceholder"
+        :tabindex="tabindex"
+        :readonly="!searchable"
+        :style="{ width: isValueEmpty ? '100%' : 'auto' }"
+        :id="inputId"
+        aria-label="Search for option"
       >
 
-      <button 
-        v-show="showClearButton" 
-        :disabled="disabled" 
+      <button
+        v-show="showClearButton"
+        :disabled="disabled"
         @click="clearSelection"
-        type="button" 
-        class="clear" 
-        title="Clear selection" 
+        type="button"
+        class="clear"
+        title="Clear selection"
       >
         <span aria-hidden="true">&times;</span>
       </button>
@@ -385,6 +390,7 @@
   import pointerScroll from '../mixins/pointerScroll'
   import typeAheadPointer from '../mixins/typeAheadPointer'
   import ajax from '../mixins/ajax'
+  import domHelpers from '../mixins/domHelpers'
 
   export default {
     mixins: [pointerScroll, typeAheadPointer, ajax],
@@ -685,12 +691,12 @@
     watch: {
       /**
        * When the value prop changes, update
-			 * the internal mutableValue.
-       * @param  {mixed} val
+       * the internal mutableValue.
+       * @param  {any} val
        * @return {void}
        */
       value(val) {
-				this.mutableValue = val
+        this.mutableValue = val
       },
 
       /**
@@ -699,7 +705,7 @@
        * @param  {string|object} old
        * @return {void}
        */
-			mutableValue(val, old) {
+      mutableValue(val, old) {
         if (this.multiple) {
           this.onChange ? this.onChange(val) : null
         } else {
@@ -718,24 +724,24 @@
       },
 
       /**
-			 * Maybe reset the mutableValue
+       * Maybe reset the mutableValue
        * when mutableOptions change.
        * @return {[type]} [description]
        */
       mutableOptions() {
         if (!this.taggable && this.resetOnOptionsChange) {
-					this.mutableValue = this.multiple ? [] : null
+          this.mutableValue = this.multiple ? [] : null
         }
       },
 
       /**
-			 * Always reset the mutableValue when
+       * Always reset the mutableValue when
        * the multiple prop changes.
        * @param  {Boolean} val
        * @return {void}
        */
       multiple(val) {
-				this.mutableValue = val ? [] : null
+        this.mutableValue = val ? [] : null
       }
     },
 
@@ -744,11 +750,52 @@
      * attach any event listeners.
      */
     created() {
-			this.mutableValue = this.value
+      this.mutableValue = this.value
       this.mutableOptions = this.options.slice(0)
-			this.mutableLoading = this.loading
+      this.mutableLoading = this.loading
 
       this.$on('option:created', this.maybePushTag)
+    },
+
+    /**
+     * Set on scroll listener.
+     */
+    mounted() {
+      const elements = domHelpers.getScrollableElements(this.$el)
+
+      if (!this.scrollHandler && elements.length) {
+        this.scrollHandler = () => {
+          if (this.open) {
+            // on scroll close the dropdown
+            this.open = false
+          }
+        }
+        if (typeof window === 'object') {
+          window.document.addEventListener('scroll', this.scrollHandler)
+        }
+
+        elements.forEach((el) => {
+          // set handler on scroll event to close the dropdown
+          el.addEventListener('scroll', this.scrollHandler)
+        })
+        // save element and handler to remove event on the component destroy
+        this.subscribedElements = elements
+      }
+    },
+
+    /**
+     * Before destroy lifecycle event handler.
+     * Remove scroll event handlers.
+     */
+    beforeDestroy() {
+      if (this.scrollHandler) {
+        if (typeof window === 'object') {
+          window.document.removeEventListener('scroll', this.scrollHandler)
+        }
+        this.subscribedElements.forEach((el) => {
+          el.removeEventListener('scroll', this.scrollHandler)
+        })
+      }
     },
 
     methods: {
@@ -789,7 +836,7 @@
               ref = val
             }
           })
-          var index = this.mutableValue.indexOf(ref)
+          const index = this.mutableValue.indexOf(ref)
           this.mutableValue.splice(index, 1)
         } else {
           this.mutableValue = null
@@ -826,7 +873,8 @@
        * @return {void}
        */
       toggleDropdown(e) {
-        if (e.target === this.$refs.openIndicator || e.target === this.$refs.search || e.target === this.$refs.toggle || e.target === this.$el) {
+        if (e.target === this.$refs.openIndicator || e.target === this.$refs.search ||
+            e.target === this.$refs.toggle || e.target === this.$el) {
           if (this.open) {
             this.$refs.search.blur() // dropdown will close on blur
           } else {
@@ -896,6 +944,10 @@
       onSearchFocus() {
         this.open = true
         this.$emit('search:focus')
+
+        this.$nextTick(() => {
+          domHelpers.positionDropdown(this.$refs.toggle, this.$refs.dropdownMenu)
+        })
       },
 
       /**
